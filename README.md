@@ -1,64 +1,113 @@
-# VPS Deployment – Mythos, FliFlow, Circle Keeper
+# Deployment Guide — Mythos, FlipFlow, Circle Keeper
 
-3 Apps auf einem Server mit automatischem SSL und Reverse Proxy.
+3 Apps deployen. Waehle eine der 3 Optionen.
 
-## Voraussetzungen
+---
 
-### Server (VPS)
-- **OS:** Ubuntu 22.04+ oder Debian 12+
-- **RAM:** Mindestens 2 GB (4 GB empfohlen)
-- **Disk:** 20 GB SSD
-- **Kosten:** ca. 5-10 EUR/Monat (Hetzner CX22 oder aehnlich)
+## Option A: Railway (Schnellster Weg)
 
-### Software
-- Docker + Docker Compose v2
-- Git
+3 Klicks pro App, kein Server noetig.
 
-### Docker installieren (falls noetig)
+### Apps deployen
+
+1. **Mythos** — [Deploy on Railway](https://railway.app/new/github/Rawkeep/Mythos)
+2. **FlipFlow** — [Deploy on Railway](https://railway.app/new/github/Rawkeep/FlipFlow-AI-Creator)
+3. **Circle Keeper** — [Deploy on Railway](https://railway.app/new/github/Rawkeep/circle-keeper)
+
+### Umgebungsvariablen setzen
+
+Nach dem Deploy unter **Variables** eintragen:
+
+| Variable | Mythos | FlipFlow | Circle Keeper |
+|----------|--------|----------|---------------|
+| `NODE_ENV` | `production` | `production` | `production` |
+| `PORT` | `3001` | `3001` | `3000` |
+| `JWT_SECRET` | `<generiert>` | `<generiert>` | — |
+
+JWT Secret generieren: `openssl rand -hex 32`
+
+### Kosten
+
+~$5-15/Monat pro App, abhaengig von Nutzung. Free Tier fuer Tests verfuegbar.
+
+---
+
+## Option B: Coolify (Self-Hosted PaaS)
+
+Eigener Server mit Web-Dashboard. Wie Railway/Vercel, aber auf deinem VPS.
+
+### VPS-Anforderungen
+
+| Anforderung | Minimum |
+|-------------|---------|
+| CPU | 2 vCPU |
+| RAM | 4 GB |
+| Disk | 30 GB SSD |
+| OS | Ubuntu 24.04 LTS |
+| Anbieter | Hetzner CX22, Netcup, DigitalOcean |
+
+### Installation
+
 ```bash
+# Auf dem VPS als root:
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+```
+
+Oder das mitgelieferte Setup-Skript verwenden:
+
+```bash
+scp coolify-setup.sh root@DEINE-IP:/root/
+ssh root@DEINE-IP
+chmod +x coolify-setup.sh
+./coolify-setup.sh
+```
+
+### Apps hinzufuegen
+
+1. Browser oeffnen: `http://DEINE-IP:8000`
+2. Admin-Account erstellen
+3. **New Resource > Public Repository** fuer jede App:
+
+| App | Repository | Port |
+|-----|-----------|------|
+| Mythos | `https://github.com/Rawkeep/Mythos` | 3001 |
+| FlipFlow | `https://github.com/Rawkeep/FlipFlow-AI-Creator` | 3001 |
+| Circle Keeper | `https://github.com/Rawkeep/circle-keeper` | 3000 |
+
+4. Umgebungsvariablen setzen (siehe Tabelle unten)
+5. Domain zuweisen unter **Settings > Domains**
+6. **Deploy** klicken — SSL wird automatisch erstellt
+
+### Kosten
+
+Nur VPS: ca. 5 EUR/Monat (Hetzner CX22).
+
+---
+
+## Option C: Docker Compose (Manuell)
+
+Volle Kontrolle ueber alles. Fuer Leute die Docker kennen.
+
+### Voraussetzungen
+
+```bash
+# Docker installieren
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
-# Neu einloggen damit Gruppenrechte aktiv werden
+# Neu einloggen
 ```
 
-## DNS-Einrichtung
+### Deployment
 
-Erstelle 3 A-Records bei deinem Domain-Anbieter, alle auf die gleiche Server-IP:
-
-| Typ | Name | Wert |
-|-----|------|------|
-| A | mythos.deinedomain.de | 123.45.67.89 |
-| A | flipflow.deinedomain.de | 123.45.67.89 |
-| A | circlekeeper.deinedomain.de | 123.45.67.89 |
-
-DNS-Propagation kann bis zu 24 Stunden dauern (meist aber unter 30 Min).
-
-## Schritt-fuer-Schritt Deployment
-
-### 1. Repos klonen
 ```bash
-cd /opt  # oder ein anderer Ordner
-git clone <mythos-repo-url> Mythos
-git clone <flipflow-repo-url> Flipflow
-git clone <circlekeeper-repo-url> CK
-git clone <deployment-repo-url> deployment
-```
+# Repos klonen
+cd /opt
+git clone https://github.com/Rawkeep/Mythos
+git clone https://github.com/Rawkeep/FlipFlow-AI-Creator Flipflow
+git clone https://github.com/Rawkeep/circle-keeper CK
+git clone https://github.com/Rawkeep/deployment
 
-### 2. Ordnerstruktur pruefen
-```
-/opt/
-  Mythos/
-  Flipflow/
-  CK/
-  deployment/
-    docker-compose.yml
-    setup.sh
-    envs/
-    nginx/
-```
-
-### 3. Setup-Skript ausfuehren
-```bash
+# Setup ausfuehren
 cd deployment
 chmod +x setup.sh
 ./setup.sh
@@ -66,54 +115,100 @@ chmod +x setup.sh
 
 Das Skript fragt interaktiv nach:
 - Domains fuer jede App
-- E-Mail-Adresse fuer SSL-Zertifikate
-- Generiert automatisch sichere JWT Secrets
+- E-Mail fuer SSL-Zertifikate
+- Generiert automatisch JWT Secrets
 
-### 4. API-Schluessel eintragen
+### Manuell starten
+
 ```bash
-nano envs/.env.mythos     # ANTHROPIC_API_KEY, OPENAI_API_KEY
-nano envs/.env.flipflow    # EBAY_APP_ID, EBAY_CERT_ID, ETSY_API_KEY
-docker compose restart
+cd /opt/deployment
+docker compose up -d
+docker compose ps        # Status pruefen
+docker compose logs -f   # Logs anschauen
 ```
 
-### 5. Pruefen
-```bash
-docker compose ps          # Alle Container laufen?
-docker compose logs -f     # Logs anschauen
-curl -I https://mythos.deinedomain.de  # SSL aktiv?
-```
+### Kosten
 
-## Monitoring
+Nur VPS: ca. 5-10 EUR/Monat.
+
+---
+
+## Umgebungsvariablen
+
+### Mythos
+
+| Variable | Pflicht | Beschreibung |
+|----------|---------|-------------|
+| `NODE_ENV` | Ja | `production` |
+| `PORT` | Ja | `3001` |
+| `JWT_SECRET` | Ja | `openssl rand -hex 32` |
+| `ANTHROPIC_API_KEY` | Nein | Fuer KI-Funktionen |
+| `OPENAI_API_KEY` | Nein | Fuer KI-Funktionen |
+
+### FlipFlow
+
+| Variable | Pflicht | Beschreibung |
+|----------|---------|-------------|
+| `NODE_ENV` | Ja | `production` |
+| `PORT` | Ja | `3001` |
+| `JWT_SECRET` | Ja | `openssl rand -hex 32` |
+| `EBAY_APP_ID` | Nein | eBay API Zugang |
+| `EBAY_CERT_ID` | Nein | eBay API Zugang |
+| `ETSY_API_KEY` | Nein | Etsy API Zugang |
+
+### Circle Keeper
+
+| Variable | Pflicht | Beschreibung |
+|----------|---------|-------------|
+| `NODE_ENV` | Ja | `production` |
+| `PORT` | Ja | `3000` |
+
+---
+
+## DNS-Einrichtung
+
+Erstelle A-Records bei deinem Domain-Anbieter:
+
+| Typ | Name | Wert |
+|-----|------|------|
+| A | `mythos.deinedomain.de` | `DEINE-SERVER-IP` |
+| A | `flipflow.deinedomain.de` | `DEINE-SERVER-IP` |
+| A | `circlekeeper.deinedomain.de` | `DEINE-SERVER-IP` |
+
+Alle 3 zeigen auf die gleiche IP. DNS-Propagation dauert meist unter 30 Minuten.
+
+Bei **Railway** wird die Domain unter **Settings > Domains** als Custom Domain eingetragen. Railway gibt dir einen CNAME-Wert den du stattdessen als CNAME-Record setzt.
+
+---
+
+## Backup & Monitoring
 
 ### Container-Status
+
 ```bash
 docker compose ps
-```
-
-### Logs anschauen
-```bash
-docker compose logs -f                 # Alle
-docker compose logs -f mythos          # Nur Mythos
-docker compose logs -f --tail=50       # Letzte 50 Zeilen
-```
-
-### Ressourcenverbrauch
-```bash
 docker stats
 ```
 
-### Neustart einzelner Apps
+### Logs
+
+```bash
+docker compose logs -f                # Alle Apps
+docker compose logs -f mythos         # Nur Mythos
+docker compose logs -f --tail=50      # Letzte 50 Zeilen
+```
+
+### Neustart
+
 ```bash
 docker compose restart mythos
 docker compose restart flipflow
 docker compose restart circlekeeper
 ```
 
-## Backup
+### Datenbank-Backup (SQLite)
 
-### SQLite-Datenbanken sichern
 ```bash
-# Backup-Skript
 BACKUP_DIR="./data/backups/$(date +%Y-%m-%d)"
 mkdir -p "$BACKUP_DIR"
 
@@ -127,6 +222,7 @@ echo "Backup gespeichert in $BACKUP_DIR"
 ```
 
 ### Automatisches Backup (Cronjob)
+
 ```bash
 # Taeglich um 3 Uhr nachts
 crontab -e
@@ -134,21 +230,7 @@ crontab -e
 0 3 * * * cd /opt/deployment && ./backup.sh >> /var/log/backup.log 2>&1
 ```
 
-## Updates
-
-### App aktualisieren
-```bash
-cd /opt/Mythos && git pull
-cd /opt/deployment && docker compose up -d --build mythos
-```
-
-### Alle Apps aktualisieren
-```bash
-cd /opt/Mythos && git pull
-cd /opt/Flipflow && git pull
-cd /opt/CK && git pull
-cd /opt/deployment && docker compose up -d --build
-```
+---
 
 ## Fehlerbehebung
 
@@ -157,13 +239,6 @@ cd /opt/deployment && docker compose up -d --build
 | Container startet nicht | `docker compose logs appname` pruefen |
 | SSL-Zertifikat fehlt | DNS pruefen, 2 Min warten, `docker compose restart letsencrypt` |
 | 502 Bad Gateway | App-Container pruefen: `docker compose ps` |
-| Port belegt | `sudo lsof -i :80` und blockierenden Prozess stoppen |
-| Speicher voll | `docker system prune -a` (entfernt ungenutzte Images) |
-
-## Kosten-Schaetzung
-
-| Posten | Monatlich |
-|--------|-----------|
-| VPS (Hetzner CX22, 2 vCPU, 4GB) | ca. 6 EUR |
-| Domain (.de) | ca. 1 EUR |
-| **Gesamt** | **ca. 7 EUR** |
+| Port belegt | `sudo lsof -i :80` und Prozess stoppen |
+| Speicher voll | `docker system prune -a` |
+| Coolify zeigt Fehler | `docker logs coolify` pruefen |
