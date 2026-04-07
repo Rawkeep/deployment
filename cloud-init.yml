@@ -1,0 +1,55 @@
+#cloud-config
+# ══════════════════════════════════════════════════════════════
+# Cloud-Init für Hetzner/DigitalOcean/Linode
+# Installiert Docker, klont alle Repos, macht alles deployment-ready
+# ══════════════════════════════════════════════════════════════
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+  - ufw
+  - fail2ban
+
+runcmd:
+  # ── Docker installieren ──
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # ── Firewall (UFW) ──
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+
+  # ── Fail2Ban aktivieren ──
+  - systemctl enable fail2ban
+  - systemctl start fail2ban
+
+  # ── Deploy-User erstellen ──
+  - useradd -m -s /bin/bash -G docker deploy
+  - mkdir -p /home/deploy/.ssh
+  - cp /root/.ssh/authorized_keys /home/deploy/.ssh/ 2>/dev/null || true
+  - chown -R deploy:deploy /home/deploy/.ssh
+  - chmod 700 /home/deploy/.ssh
+
+  # ── Repos klonen ──
+  - mkdir -p /opt/apps
+  - cd /opt/apps
+  - git clone https://github.com/Rawkeep/Mythos.git Mythos
+  - git clone https://github.com/Rawkeep/FlipFlow-AI-Creator.git Flipflow
+  - git clone https://github.com/Rawkeep/circle-keeper.git CK
+  - git clone https://github.com/Rawkeep/deployment.git deployment
+  - chown -R deploy:deploy /opt/apps
+
+  # ── Fertig-Meldung ──
+  - echo "=== VPS READY === Docker + Repos installiert. Jetzt: cd /opt/apps/deployment && ./setup.sh" > /etc/motd
