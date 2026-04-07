@@ -1,0 +1,130 @@
+version: "3.8"
+
+services:
+  # ── Reverse Proxy ────────────────────────────────────────────────────────────
+  nginx-proxy:
+    image: jwilder/nginx-proxy:alpine
+    container_name: nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-certs:/etc/nginx/certs:ro
+      - nginx-vhost:/etc/nginx/vhost.d
+      - nginx-html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - ./nginx/custom.conf:/etc/nginx/conf.d/custom.conf:ro
+    networks:
+      - web
+    labels:
+      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy"
+
+  # ── SSL (Let's Encrypt) ─────────────────────────────────────────────────────
+  letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: letsencrypt
+    restart: unless-stopped
+    depends_on:
+      - nginx-proxy
+    volumes:
+      - nginx-certs:/etc/nginx/certs:rw
+      - nginx-vhost:/etc/nginx/vhost.d
+      - nginx-html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt-acme:/etc/acme.sh
+    environment:
+      - DEFAULT_EMAIL=admin@example.com
+    networks:
+      - web
+
+  # ── Mythos – Social Media Content Factory ───────────────────────────────────
+  mythos:
+    build:
+      context: ../Mythos
+      dockerfile: Dockerfile
+    container_name: mythos
+    restart: unless-stopped
+    env_file:
+      - ./envs/.env.mythos
+    environment:
+      - VIRTUAL_HOST=mythos.example.com
+      - VIRTUAL_PORT=3001
+      - LETSENCRYPT_HOST=mythos.example.com
+      - LETSENCRYPT_EMAIL=admin@example.com
+    volumes:
+      - mythos-data:/app/data
+      - mythos-uploads:/app/uploads
+      - mythos-output:/app/output
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── FliFlow – Arbitrage Engine ──────────────────────────────────────────────
+  flipflow:
+    build:
+      context: ../Flipflow
+      dockerfile: Dockerfile
+    container_name: flipflow
+    restart: unless-stopped
+    env_file:
+      - ./envs/.env.flipflow
+    environment:
+      - VIRTUAL_HOST=flipflow.example.com
+      - VIRTUAL_PORT=3002
+      - LETSENCRYPT_HOST=flipflow.example.com
+      - LETSENCRYPT_EMAIL=admin@example.com
+      - PORT=3002
+    volumes:
+      - flipflow-data:/app/data
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Circle Keeper – Relationship Manager ────────────────────────────────────
+  circlekeeper:
+    build:
+      context: ../CK
+      dockerfile: Dockerfile
+    container_name: circlekeeper
+    restart: unless-stopped
+    env_file:
+      - ./envs/.env.circlekeeper
+    environment:
+      - VIRTUAL_HOST=circlekeeper.example.com
+      - VIRTUAL_PORT=3003
+      - LETSENCRYPT_HOST=circlekeeper.example.com
+      - LETSENCRYPT_EMAIL=admin@example.com
+      - PORT=3003
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+networks:
+  web:
+    external: false
+
+volumes:
+  nginx-certs:
+  nginx-vhost:
+  nginx-html:
+  letsencrypt-acme:
+  mythos-data:
+  mythos-uploads:
+  mythos-output:
+  flipflow-data:
